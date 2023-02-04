@@ -59,7 +59,7 @@ class Image {
    *
    * Data will have size width * height * 4 (RGB)
    */
-  char* data() const;
+  unsigned char* data() const;
 
   /**
    * @brief Replace image RGB data
@@ -189,7 +189,10 @@ class Image {
   void fill(const Pixel& c);
 
  private:
-   // todo
+   int _width;
+   int _height;
+
+   unsigned char* _data;
 };
 }  // namespace agl
 #endif  // AGL_IMAGE_H_

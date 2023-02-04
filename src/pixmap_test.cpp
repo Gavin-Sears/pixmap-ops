@@ -12,7 +12,7 @@ int main(int argc, char** argv)
       std::cout << "ERROR: Cannot load image! Exiting...\n";
       exit(0);
    }
-
+   
    for (int i = 0; i < image.height(); i++) {
       for (int j = 0; j < image.width(); j++) {
          Pixel c = image.get(i, j);
@@ -50,8 +50,8 @@ int main(int argc, char** argv)
 
    // should print 400 400
    cout << "loaded earth: " << image.width() << " " << image.height() << endl;
-
    // resize
+
    Image resize = image.resize(200,300);
    resize.save("earth-200-300.png");
 
