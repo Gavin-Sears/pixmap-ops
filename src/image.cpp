@@ -956,18 +956,18 @@ Image Image::tesselate(const Image& other, float scale) const {
    Pixel colorful = {};
 
    // For each starting y position for a given subimage
-   for (int iy = 0; iy < (miniHeight * _width); iy += miniHeight) {
+   for (int iy = 0; iy < (miniHeight * _height); iy += miniHeight) {
 
       // For each starting x position for a given subimage
-      for (int ix = 0; ix < (miniWidth * _height); ix += miniWidth) {
+      for (int ix = 0; ix < (miniWidth * _width); ix += miniWidth) {
 
          sub = other.resize(miniWidth, miniHeight);
 
-         colorful = get((ix / miniWidth), (iy / miniHeight));
-         
+         colorful = get((iy / miniHeight), (ix / miniWidth));
+
          sub = sub.average(colorful);
 
-         result.replace(sub, ix, iy);
+         result.replace(sub, iy, ix);
 
       }
 
