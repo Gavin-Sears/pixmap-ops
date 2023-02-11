@@ -11,6 +11,16 @@
 * of visual effects which alter the colors and
 * /or incorporate other images.
 *
+* leaks --atExit -- ../bin/pixmap_test
+*
+* lldb ../bin/pixmap_test
+*
+* r (for run)
+*
+* thread backtrace
+*
+* quit
+*
 * @author: S. Gavin Sears
 * @version: February 3, 2023
 */
@@ -41,7 +51,7 @@ Image::Image(int width, int height)  {
    _width = width;
    _height = height;
 
-   _data = NULL;
+   _data = new unsigned char[3 * _width * _height];
 }
 
 // Copy
@@ -49,7 +59,8 @@ Image::Image(const Image& orig) {
    _width = orig._width;
    _height = orig._height;
 
-   _data = orig._data;
+   _data = new unsigned char[3 * _width * _height];
+   memcpy(_data, orig._data, sizeof(unsigned char) * 3 * _height * _width);
 }
 
 // Assignment
@@ -57,16 +68,21 @@ Image& Image::operator=(const Image& orig) {
   if (&orig == this) {
     return *this;
   }
+
+   delete[] _data;
+
+   _data = new unsigned char[3 * orig._width * orig._height];
+
    _width = orig._width;
    _height = orig._height;
-
-   _data = orig._data;
+   memcpy(_data, orig._data, sizeof(unsigned char) * 3 * _height * _width);
 
   return *this;
 }
 
 // Destructor
 Image::~Image() {
+   delete[] _data;
 }
 
 // Getters
@@ -86,19 +102,27 @@ unsigned char* Image::data() const {
 void Image::set(int width, int height, unsigned char* data) {
    _width = width;
    _height = height;
-   _data = data;
+   
+   delete[] _data;
+
+   _data = new unsigned char[3 * _width * _height];
+   memcpy(_data, data, sizeof(unsigned char) * 3 * _height * _width);
 }
 
-// Loader (Working)
+// Loader
 bool Image::load(const std::string& filename, bool flip) {
+
+   delete[] _data;
+   _data = NULL;
 
    // Getting file info
    int x, y, n;
-   unsigned char* img = stbi_load(filename.c_str(), &x, &y, &n, 0);
+   unsigned char* img = stbi_load(filename.c_str(), &x, &y, &n, 3);
 
    // Checking that file was read
    if (img != NULL) {
       set(x, y, img);
+      stbi_image_free(img);
       return true;
    }
    else {
@@ -157,9 +181,9 @@ void Image::set(int row, int col, const Pixel& color) {
 Pixel Image::get(int i) const {
 
    return Pixel { 
-                 _data[i * 3], 
-                 _data[i * 3 + 1], 
-                 _data[i * 3 + 2] 
+         _data[i * 3], 
+         _data[i * 3 + 1], 
+         _data[i * 3 + 2] 
    };
 }
 
@@ -173,13 +197,8 @@ void Image::set(int i, const Pixel& c) {
 
 // Image resize
 Image Image::resize(int w, int h) const {
-
    // New image to translate to
-   Image result(0, 0);
-
-   // New blank image data to write to
-   unsigned char data2[w * h * 3];
-   result.set(w, h, data2);
+   Image result(w, h);
 
    // Placeholders for loop
    int origRow;
@@ -213,11 +232,7 @@ Image Image::resize(int w, int h) const {
 }
 
 Image Image::flipHorizontal() const {
-   Image result(0, 0);
-
-   // New blank image data to write to
-   unsigned char data2[_width * _height * 3];
-   result.set(_width, _height, data2);
+   Image result(_width, _height);
 
    Pixel colorful = {};
 
@@ -231,7 +246,7 @@ Image Image::flipHorizontal() const {
          colorful = get(r, c);
 
          // Setting pixels in reverse order
-         result.set((_height - r - 1), (_width - c - 1), colorful);
+         result.set((_height - 1 - r), (_width - 1 - c), colorful);
       }
 
    }
@@ -240,22 +255,47 @@ Image Image::flipHorizontal() const {
 }
 
 Image Image::flipVertical() const {
-   Image result(0, 0);
+   Image result(_width, _height);
+
+   Pixel colorful = {};
+
+   // For each row (y)
+   for (int r = 0; r < _height; ++r) {
+
+      // For each column (x)
+      for (int c = 0; c < _width; ++c) {
+
+         colorful = get(r, c);
+
+         result.set(r, (_width - 1 - c), colorful);
+      }
+   }
+
    return result;
 }
 
 Image Image::rotate90() const {
-   Image result(0, 0);
-  
+   Image result(_height, _width);
+
+   Pixel colorful = {};
+
+   // For each row (y)
+   for (int r = 0; r < _height; ++r) {
+
+      // For each column (x)
+      for (int c = 0; c < _width; ++c) {
+
+         colorful = get(r, c);
+
+         result.set(c, r, colorful);
+      }
+   }
+
    return result;
 }
 
 Image Image::subimage(int startx, int starty, int w, int h) const {
-  
-   Image sub(0, 0);
-   // New blank image data to write to
-   unsigned char data2[w * h * 3];
-   sub.set(w, h, data2);
+   Image sub(w, h);
 
    // Tracking Pixel
    Pixel colorful = {};
@@ -279,8 +319,6 @@ Image Image::subimage(int startx, int starty, int w, int h) const {
 }
 
 void Image::replace(const Image& image, int startx, int starty) {
-
-   // Tracking Pixel
    Pixel colorful = {};
 
    // For each row in area (y)
@@ -301,54 +339,325 @@ void Image::replace(const Image& image, int startx, int starty) {
 }
 
 Image Image::swirl() const {
-   Image result(0, 0);
+   Image result(_width, _height);
+
+   // Tracking Pixel
+   Pixel colorful = {};
+
+   // For each row in area (y)
+   for (int r = 0; r < _height; ++r) {
+      
+      // For each column in area (x)
+      for (int c = 0; c < _width; ++c) {
+
+         // Getting current pixel offset by start
+         colorful = get(r, c);
+
+         // Subtracting colors from 255
+         colorful = {
+            colorful.g,
+            colorful.b,
+            colorful.r
+         };
+
+         // Setting pixels in reverse order
+         result.set(r, c, colorful);
+      }
+
+   }
+   
    return result;
 }
 
 Image Image::add(const Image& other) const {
-   Image result(0, 0);
-  
+   Image result(_width, _height);
+
+   // Tracking Pixel
+   Pixel colorful = {};
+   // Tracking Pixel other
+   Pixel otherful = {};
+
+   // Final colors
+   int myR;
+   int myG;
+   int myB;
+
+   // For each row in area (y)
+   for (int r = 0; r < _height; ++r) {
+      
+      // For each column in area (x)
+      for (int c = 0; c < _width; ++c) {
+
+         // Getting current pixel
+         colorful = get(r, c);
+         // Getting curent pixel from other
+         otherful = other.get(r, c);
+
+         myR = (int)colorful.r + (int)otherful.r;
+         myG = (int)colorful.g + (int)otherful.g;
+         myB = (int)colorful.b + (int)otherful.b;
+
+         if (myR > 255) {
+            myR = 255;
+         }
+         if (myG > 255) {
+            myG = 255;
+         }
+         if (myB > 255) {
+            myB = 255;
+         }
+
+         // Subtracting colors from 255
+         colorful = {
+            (unsigned char)myR,
+            (unsigned char)myG,
+            (unsigned char)myB
+         };
+
+         // Setting pixels in reverse order
+         result.set(r, c, colorful);
+      }
+
+   }
+
    return result;
 }
 
 Image Image::subtract(const Image& other) const {
-   Image result(0, 0);
+   Image result(_width, _height);
+
+   // Tracking Pixel
+   Pixel colorful = {};
+   // Tracking Pixel other
+   Pixel otherful = {};
+
+   // Final colors
+   int myR;
+   int myG;
+   int myB;
+
+   // For each row in area (y)
+   for (int r = 0; r < _height; ++r) {
+      
+      // For each column in area (x)
+      for (int c = 0; c < _width; ++c) {
+
+         // Getting current pixel
+         colorful = get(r, c);
+         // Getting curent pixel from other
+         otherful = other.get(r, c);
+
+         myR = (int)colorful.r - (int)otherful.r;
+         myG = (int)colorful.g - (int)otherful.g;
+         myB = (int)colorful.b - (int)otherful.b;
+
+         if (myR < 0) {
+            myR = 0;
+         }
+         if (myG < 0) {
+            myG = 0;
+         }
+         if (myB < 0) {
+            myB = 0;
+         }
+
+         // Subtracting colors from 255
+         colorful = {
+            (unsigned char)myR,
+            (unsigned char)myG,
+            (unsigned char)myB
+         };
+
+         // Setting pixels in reverse order
+         result.set(r, c, colorful);
+      }
+
+   }
    
    return result;
 }
 
 Image Image::multiply(const Image& other) const {
-   Image result(0, 0);
-   
+   Image result(_width, _height);
+
+   // Tracking Pixel
+   Pixel colorful = {};
+   // Tracking Pixel other
+   Pixel otherful = {};
+
+   // Final colors
+   int myR;
+   int myG;
+   int myB;
+
+   // For each row in area (y)
+   for (int r = 0; r < _height; ++r) {
+      
+      // For each column in area (x)
+      for (int c = 0; c < _width; ++c) {
+
+         // Getting current pixel
+         colorful = get(r, c);
+         // Getting curent pixel from other
+         otherful = other.get(r, c);
+
+         myR = (int)colorful.r * (int)otherful.r;
+         myG = (int)colorful.g * (int)otherful.g;
+         myB = (int)colorful.b * (int)otherful.b;
+
+         
+         if (myR > 255) {
+            myR = 255;
+         } else if (myR < 0) {
+            myR = 0;
+         }
+         if (myG > 255) {
+            myG = 255;
+         } else if (myG < 0) {
+            myG = 0;
+         }
+         if (myB > 255) {
+            myB = 255;
+         } else if (myB < 0) {
+            myB = 0;
+         }
+
+         // Subtracting colors from 255
+         colorful = {
+            (unsigned char)myR,
+            (unsigned char)myG,
+            (unsigned char)myB
+         };
+
+         // Setting pixels in reverse order
+         result.set(r, c, colorful);
+      }
+
+   }
+
    return result;
 }
 
 Image Image::difference(const Image& other) const {
    Image result(0, 0);
-  
+
    return result;
 }
 
 Image Image::lightest(const Image& other) const {
-   Image result(0, 0);
+   Image result(_width, _height);
+
+   // Tracking Pixel
+   Pixel colorful = {};
+   // Tracking Pixel other
+   Pixel otherful = {};
+
+   // Final colors
+   int myR;
+   int myG;
+   int myB;
+
+   // For each row in area (y)
+   for (int r = 0; r < _height; ++r) {
+      
+      // For each column in area (x)
+      for (int c = 0; c < _width; ++c) {
+
+         // Getting current pixel
+         colorful = get(r, c);
+         // Getting curent pixel from other
+         otherful = other.get(r, c);
+         
+         if (colorful.r >= otherful.r) {
+            myR = colorful.b;
+         } else {
+            myR = otherful.r;
+         }
+         if (colorful.g >= otherful.g) {
+            myG = colorful.g;
+         } else {
+            myG = otherful.g;
+         }
+         if (colorful.b >= otherful.b) {
+            myB = colorful.b;
+         } else {
+            myB = otherful.b;
+         }
+
+         // Subtracting colors from 255
+         colorful = {
+            (unsigned char)myR,
+            (unsigned char)myG,
+            (unsigned char)myB
+         };
+
+         // Setting pixels in reverse order
+         result.set(r, c, colorful);
+      }
+
+   }
   
    return result;
 }
 
 Image Image::darkest(const Image& other) const {
-   Image result(0, 0);
+   Image result(_width, _height);
+
+   // Tracking Pixel
+   Pixel colorful = {};
+   // Tracking Pixel other
+   Pixel otherful = {};
+
+   // Final colors
+   int myR;
+   int myG;
+   int myB;
+
+   // For each row in area (y)
+   for (int r = 0; r < _height; ++r) {
+      
+      // For each column in area (x)
+      for (int c = 0; c < _width; ++c) {
+
+         // Getting current pixel
+         colorful = get(r, c);
+         // Getting curent pixel from other
+         otherful = other.get(r, c);
+         
+         if (colorful.r <= otherful.r) {
+            myR = colorful.b;
+         } else {
+            myR = otherful.r;
+         }
+         if (colorful.g <= otherful.g) {
+            myG = colorful.g;
+         } else {
+            myG = otherful.g;
+         }
+         if (colorful.b <= otherful.b) {
+            myB = colorful.b;
+         } else {
+            myB = otherful.b;
+         }
+
+         // Subtracting colors from 255
+         colorful = {
+            (unsigned char)myR,
+            (unsigned char)myG,
+            (unsigned char)myB
+         };
+
+         // Setting pixels in reverse order
+         result.set(r, c, colorful);
+      }
+
+   }
   
    return result;
 }
 
-// NOT DONE
 Image Image::gammaCorrect(float gamma) const {
-
-   Image result(0, 0);
-
-   // New blank image data to write to
-   unsigned char data2[_width * _height * 3];
-   result.set(_width, _height, data2);
+   Image result(_width, _height);
 
    // Intensities of each color
    float intensR;
@@ -379,7 +688,11 @@ Image Image::gammaCorrect(float gamma) const {
          myB = (int)(255 * pow(intensB, 1/gamma));
 
          // Defining new pixel
-         colorful = {(unsigned char)myR, (unsigned char)myG, (unsigned char)myB};
+         colorful = {
+            (unsigned char)myR, 
+            (unsigned char)myG, 
+            (unsigned char)myB 
+         };
 
          // Setting new pixel
          result.set(r, c, colorful);
@@ -392,11 +705,7 @@ Image Image::gammaCorrect(float gamma) const {
 
 Image Image::alphaBlend(const Image& other, float alpha) const {
    // this.pixels = this.pixels * (1-alpha) + other.pixel * alpha
-   Image result(0, 0);
-
-   // New blank image data to write to
-   unsigned char data2[_width * _height * 3];
-   result.set(_width, _height, data2);
+   Image result(_width, _height);
 
    Pixel colorful = {};
    Pixel colorOther = {};
@@ -416,12 +725,22 @@ Image Image::alphaBlend(const Image& other, float alpha) const {
          colorOther = other.get(r, c);
 
          // Defining colors
-         colorfulR = ((int)colorful.r * (1.0f - alpha)) + ((int)colorOther.r * alpha);
-         colorfulG = ((int)colorful.g * (1.0f - alpha)) + ((int)colorOther.g * alpha);
-         colorfulB = ((int)colorful.b * (1.0f - alpha)) + ((int)colorOther.b * alpha);
+         colorfulR = ((int)colorful.r * 
+                     (1.0f - alpha)) + 
+                     ((int)colorOther.r * alpha);
+         colorfulG = ((int)colorful.g * 
+                     (1.0f - alpha)) + 
+                     ((int)colorOther.g * alpha);
+         colorfulB = ((int)colorful.b * 
+                     (1.0f - alpha)) + 
+                     ((int)colorOther.b * alpha);
 
          // Defining new pixel
-         colorful = {(unsigned char)colorfulR, (unsigned char)colorfulG, (unsigned char)colorfulB};
+         colorful = {
+            (unsigned char)colorfulR, 
+            (unsigned char)colorfulG, 
+            (unsigned char)colorfulB
+         };
 
          // Setting new pixel
          result.set(r, c, colorful);
@@ -433,18 +752,39 @@ Image Image::alphaBlend(const Image& other, float alpha) const {
 }
 
 Image Image::invert() const {
-   Image image(0, 0);
+   Image image(_width, _height);
+
+   // Tracking Pixel
+   Pixel colorful = {};
+
+   // For each row in area (y)
+   for (int r = 0; r < _height; ++r) {
+      
+      // For each column in area (x)
+      for (int c = 0; c < _width; ++c) {
+
+         // Getting current pixel offset by start
+         colorful = get(r, c);
+
+         // Subtracting colors from 255
+         colorful = {
+            (unsigned char)(255 - (int)colorful.r),
+            (unsigned char)(255 - (int)colorful.g),
+            (unsigned char)(255 - (int)colorful.b)
+         };
+
+         // Setting pixels in reverse order
+         image.set(r, c, colorful);
+      }
+
+   }
    
    return image;
 }
 
 // Grayscale operator
 Image Image::grayscale() const {
-   Image result(0, 0);
-
-   // New blank image data to write to
-   unsigned char data2[_width * _height * 3];
-   result.set(_width, _height, data2);
+   Image result(_width, _height);
 
    // Placeholders for loop
    int intens;
@@ -460,9 +800,14 @@ Image Image::grayscale() const {
          colorful = get(r, c);
 
          // Setting intensity
-         intens = (int)((1 / (float)3) * (colorful.r + colorful.g + colorful.b));
+         intens = (int)((1 / (float)3) * 
+                  (colorful.r + colorful.g + colorful.b));
 
-         colorful = {(unsigned char)intens, (unsigned char)intens, (unsigned char)intens};
+         colorful = {
+            (unsigned char)intens, 
+            (unsigned char)intens, 
+            (unsigned char)intens
+         };
 
          // Setting pixel on new image
          result.set(r, c, colorful);
@@ -481,12 +826,159 @@ Image Image::colorJitter(int size) const {
 
 Image Image::bitmap(int size) const {
    Image image(0, 0);
-   
+
    return image;
 }
 
-void Image::fill(const Pixel& c) {
-  }
+Image Image::addBorder(int wid) const {
+   Image image(_width + (wid * 2), _height + (wid * 2));
 
-}  // namespace agl
+   int myR;
+   int myG;
+   int myB;
+   
+   Pixel colorful = {};
+
+   // For each row (y)
+   for (int r = 0; r < (_height + (wid * 2)); ++r) {
+      
+      // For each column (x)
+      for (int c = 0; c < (_width + (wid * 2)); ++c) {
+
+         // Creating fun border effect
+         myR = r;
+         myG = c;
+         myB = (c / 3);
+
+         // Clamping RGB values
+         if (myR > 255) {
+            myR = 255;
+         } else if (myR < 0) {
+            myR = 0;
+         }
+         if (myG > 255) {
+            myG = 255;
+         } else if (myG < 0) {
+            myG = 0;
+         }
+         if (myB > 255) {
+            myB = 255;
+         } else if (myB < 0) {
+            myB = 0;
+         }
+
+         colorful = {
+            (unsigned char)myR, 
+            (unsigned char)myG, 
+            (unsigned char)myB
+         };
+
+         // Setting pixel on new image
+         image.set(r, c, colorful);
+      }
+      
+   }
+
+   image.replace(*this, wid, wid);
+
+   return image;
+}
+
+Image Image::average(const Pixel& c) const {
+   Image result(_width, _height);
+
+   Pixel colorful = {};
+
+   int origR = c.r;
+   int origG = c.g;
+   int origB = c.b;
+
+   int myR;
+   int myG;
+   int myB;
+
+   // For each row (y)
+   for (int r = 0; r < (_height); ++r) {
+      
+      // For each column (x)
+      for (int c = 0; c < (_width); ++c) {
+
+         colorful = get(r, c);
+
+         // Creating fun border effect
+         myR = ((int)colorful.r + origR) / 2;
+         myG = ((int)colorful.g + origG) / 2;
+         myB = ((int)colorful.b + origB) / 2;
+
+         // Clamping RGB values
+         if (myR > 255) {
+            myR = 255;
+         } else if (myR < 0) {
+            myR = 0;
+         }
+         if (myG > 255) {
+            myG = 255;
+         } else if (myG < 0) {
+            myG = 0;
+         }
+         if (myB > 255) {
+            myB = 255;
+         } else if (myB < 0) {
+            myB = 0;
+         }
+
+         colorful = {
+            (unsigned char)myR, 
+            (unsigned char)myG, 
+            (unsigned char)myB
+         };
+
+         // Setting pixel on new image
+         result.set(r, c, colorful);
+      }
+      
+   }
+
+   return result;
+
+}
+
+Image Image::tesselate(const Image& other, float scale) const {
+   // Each mini image will have a size dependant on the scale
+   int miniWidth = (int)(_width * scale);
+   int miniHeight = (int)(_height * scale);
+
+   Image result((miniWidth * _width), (miniHeight * _height));
+
+   Pixel colorful = {};
+
+   // For each starting y position for a given subimage
+   for (int iy = 0; iy < (miniHeight * _height); iy += miniHeight) {
+
+      // For each starting x position for a given subimage
+      for (int ix = 0; ix < (miniWidth * _width); ix += miniWidth) {
+
+         // Subimage
+         Image sub = other.resize(miniWidth, miniHeight);
+
+         colorful = get((ix / miniWidth), (iy / miniHeight));
+
+         sub = sub.average(colorful);
+
+         result.replace(sub, (ix), (iy));
+
+      }
+
+   }
+
+   return result;
+
+}
+
+void Image::fill(const Pixel& c) {
+
+}
+// namespace agl
+
+}
 
