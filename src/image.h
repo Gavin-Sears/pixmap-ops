@@ -198,9 +198,6 @@ class Image {
   // image dimensions (150 x 150), and (284 x 284) 
   // for the sub image, which seems to imply any resolution
   // nearing (42600 x 42600) will likely be pushing the limit.
-  // Larger images will likely cause segmentation errors.
-  // Also, as a side note, using square images is good for avoiding
-  // scaling issues.
   Image tesselate(const Image& other, float scale) const;
 
   // Fill this image with a color

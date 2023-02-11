@@ -119,7 +119,7 @@ Takes each RGB value, and compares them to a color provided by the user. Takes t
 
 ## tesselate
 
-![wordlySoup.png](/Users/stephensears/cs313/pixmap-ops/Examples/wordlySoup.png)
+![wordlySoupBetter.png](/Users/stephensears/cs313/pixmap-ops/Examples/wordlySoupBetter.png)
 
 Creates a small version of a given image, scales it to a desired magnitude, and replaces each pixel in the image with said subimage. Each subimage is also averaged with the original pixel color.
 

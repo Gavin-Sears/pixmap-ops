@@ -945,27 +945,29 @@ Image Image::average(const Pixel& c) const {
 
 Image Image::tesselate(const Image& other, float scale) const {
    // Each mini image will have a size dependant on the scale
-   int miniWidth = (int)(_width * scale);
-   int miniHeight = (int)(_height * scale);
+   int miniWidth = (int)(other.width() * scale);
+   int miniHeight = (int)(other.height() * scale);
 
    Image result((miniWidth * _width), (miniHeight * _height));
+
+   // Subimage
+   Image sub;
 
    Pixel colorful = {};
 
    // For each starting y position for a given subimage
-   for (int iy = 0; iy < (miniHeight * _height); iy += miniHeight) {
+   for (int iy = 0; iy < (miniHeight * _width); iy += miniHeight) {
 
       // For each starting x position for a given subimage
-      for (int ix = 0; ix < (miniWidth * _width); ix += miniWidth) {
+      for (int ix = 0; ix < (miniWidth * _height); ix += miniWidth) {
 
-         // Subimage
-         Image sub = other.resize(miniWidth, miniHeight);
+         sub = other.resize(miniWidth, miniHeight);
 
          colorful = get((ix / miniWidth), (iy / miniHeight));
-
+         
          sub = sub.average(colorful);
 
-         result.replace(sub, (ix), (iy));
+         result.replace(sub, ix, iy);
 
       }
 

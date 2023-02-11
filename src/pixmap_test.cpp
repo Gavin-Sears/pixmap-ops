@@ -147,8 +147,8 @@ int main(int argc, char** argv)
    averageAxolotl = axolotl.average({0, 0, 255});
    averageAxolotl.save("averageAxolotlB.png");
 
-   Image tesSoup = soup.resize(40, 40);
-   tesSoup = tesSoup.tesselate(image, 0.7f);
+   Image tesSoup = soup.resize(60, 90);
+   tesSoup = tesSoup.tesselate(image, 0.3f);
    tesSoup.save("wordlySoup.png");
 
    // End of Examples
